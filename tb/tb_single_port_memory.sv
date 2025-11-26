@@ -19,20 +19,19 @@
 //--------------------------
 
 
-module tb_multi_port_memory;
+module tb_single_port_memory;
 
   //---------------------------
   // Design Time Parameters
   //---------------------------
 
   // General parameters
-  parameter int unsigned DataWidth  = 8;
-  parameter int unsigned NumPorts   = 4;
-  parameter int unsigned DataDepth  = 4096;
-  parameter int unsigned AddrWidth  = (DataDepth <= 1) ? 1 : $clog2(DataDepth);
+  parameter int unsigned DataWidth = 8;
+  parameter int unsigned DataDepth = 4096;
+  parameter int unsigned AddrWidth = (DataDepth <= 1) ? 1 : $clog2(DataDepth);
 
   // Test parameters
-  parameter int unsigned NumIterations = DataDepth / NumPorts;
+  parameter int unsigned NumIterations = DataDepth;
 
   //---------------------------
   // Wires
@@ -41,32 +40,30 @@ module tb_multi_port_memory;
   logic clk_i, rst_ni;
 
   // Some other signals
-  logic [AddrWidth-1:0] addr;
+  logic        [AddrWidth-1:0] addr;
 
   // Memory control
-  logic        [NumPorts-1:0][AddrWidth-1:0] mem_addr;
-  logic        [NumPorts-1:0]                mem_we;
-  logic signed [NumPorts-1:0][DataWidth-1:0] mem_wr_data;
-  logic signed [NumPorts-1:0][DataWidth-1:0] mem_rd_data;
-
+  logic        [AddrWidth-1:0] mem_addr;
+  logic                        mem_we;
+  logic signed [DataWidth-1:0] mem_wr_data;
+  logic signed [DataWidth-1:0] mem_rd_data;
   // Golden data dump
-  logic signed [DataWidth-1:0] G_memory [DataDepth];
+  logic signed [DataWidth-1:0] G_memory    [DataDepth];
 
   //---------------------------
   // DUT instantiation
   //---------------------------
-  multi_port_memory #(
-    .DataWidth     ( DataWidth   ),
-    .NumPorts      ( NumPorts    ),
-    .DataDepth     ( DataDepth   ),
-    .AddrWidth     ( AddrWidth   )
+  single_port_memory #(
+      .DataWidth(DataWidth),
+      .DataDepth(DataDepth),
+      .AddrWidth(AddrWidth)
   ) i_sram_a (
-    .clk_i         ( clk_i       ),
-    .rst_ni        ( rst_ni      ),
-    .mem_addr_i    ( mem_addr    ),
-    .mem_we_i      ( mem_we      ),
-    .mem_wr_data_i ( mem_wr_data ),
-    .mem_rd_data_o ( mem_rd_data )
+      .clk_i        (clk_i),
+      .rst_ni       (rst_ni),
+      .mem_addr_i   (mem_addr),
+      .mem_we_i     (mem_we),
+      .mem_wr_data_i(mem_wr_data),
+      .mem_rd_data_o(mem_rd_data)
   );
 
   //---------------------------
@@ -94,7 +91,7 @@ module tb_multi_port_memory;
 
     // Initialize golden memory
     for (int unsigned i = 0; i < DataDepth; i++) begin
-      G_memory[i] = $urandom(); // Random values
+      G_memory[i] = $urandom();  // Random values
     end
 
     clk_delay(1);
@@ -104,14 +101,12 @@ module tb_multi_port_memory;
 
     // Fill in the contents of actual memory with the golden data
     for (int unsigned iter = 0; iter < NumIterations; iter++) begin
-      for (int unsigned port = 0; port < NumPorts; port++) begin
-        // Calculate the address
-        addr = iter * NumPorts + port;
-        // Load the control signals
-        mem_addr   [port] = addr;
-        mem_we     [port] = 1'b1;
-        mem_wr_data[port] = G_memory[addr];
-      end
+      // Calculate the address
+      addr        = iter;
+      // Load the control signals
+      mem_addr    = addr;
+      mem_we      = 1'b1;
+      mem_wr_data = G_memory[addr];
       clk_delay(1);
       // Disable after
       mem_we = '0;
@@ -123,27 +118,22 @@ module tb_multi_port_memory;
     // Read and compare the loaded data to the golden data
     for (int unsigned iter = 0; iter < NumIterations; iter++) begin
       // Read the data first
-      for (int unsigned port = 0; port < NumPorts; port++) begin
-        addr = iter * NumPorts + port;
-        mem_addr[port] = addr;
-      end
-
+      addr = iter;
+      mem_addr = addr;
       // Get data in next cycle
       clk_delay(1);
 
       // Compare read data with golden data
-      for (int unsigned port = 0; port < NumPorts; port++) begin
-        addr = iter * NumPorts + port;
-        if (mem_rd_data[port] !== G_memory[addr]) begin
-          $error("Data mismatch at address %0d: expected %0d, got %0d",
-                 addr, G_memory[addr], mem_rd_data[port]);
-        end
+      addr = iter;
+      if (mem_rd_data !== G_memory[addr]) begin
+        $error("Data mismatch at address %0d: expected %0d, got %0d", addr, G_memory[addr],
+               mem_rd_data);
       end
     end
 
     // Finish simulation
     clk_delay(5);
-    $display("Multi-port memory test completed successfully.");
+    $display("Single-port memory test completed successfully.");
     $finish;
   end
 

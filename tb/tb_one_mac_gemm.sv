@@ -18,20 +18,16 @@ module tb_one_mac_gemm;
   // Or you can also add your own parameters.
   //---------------------------
 
-   // General Parameters
-  parameter int unsigned InDataWidth   = 8;
-  parameter int unsigned OutDataWidth  = 32;
-  parameter int unsigned DataDepth     = 4096;
-  parameter int unsigned AddrWidth     = (DataDepth <= 1) ? 1 : $clog2(DataDepth);
+  // General Parameters
+  parameter int unsigned InDataWidth = 8;
+  parameter int unsigned OutDataWidth = 32;
+  parameter int unsigned DataDepth = 4096;
+  parameter int unsigned AddrWidth = (DataDepth <= 1) ? 1 : $clog2(DataDepth);
   parameter int unsigned SizeAddrWidth = 8;
 
-  parameter int unsigned NumInputA  = 1;
-  parameter int unsigned NumInputB  = 1;
-  parameter int unsigned NumOutputC = 1;
-
   // Test Parameters
-  parameter int unsigned MaxNum    = 32;
-  parameter int unsigned NumTests  = 10;
+  parameter int unsigned MaxNum = 32;
+  parameter int unsigned NumTests = 10;
 
   parameter int unsigned SingleM = 8;
   parameter int unsigned SingleK = 8;
@@ -45,27 +41,27 @@ module tb_one_mac_gemm;
   logic [SizeAddrWidth-1:0] M_i, K_i, N_i;
 
   // Clock, reset, and other signals
-  logic clk_i;
-  logic rst_ni;
-  logic start;
-  logic done;
+  logic                           clk_i;
+  logic                           rst_ni;
+  logic                           start;
+  logic                           done;
 
   //---------------------------
   // Memory
   //---------------------------
   // Golden data dump
-  logic signed [OutDataWidth-1:0] G_memory [DataDepth];
+  logic signed [OutDataWidth-1:0] G_memory     [DataDepth];
 
   // Memory control
-  logic        [ NumInputA-1:0][AddrWidth-1:0] sram_a_addr;
-  logic        [ NumInputB-1:0][AddrWidth-1:0] sram_b_addr;
-  logic        [NumOutputC-1:0][AddrWidth-1:0] sram_c_addr;
+  logic        [   AddrWidth-1:0] sram_a_addr;
+  logic        [   AddrWidth-1:0] sram_b_addr;
+  logic        [   AddrWidth-1:0] sram_c_addr;
 
   // Memory access
-  logic signed [ NumInputA-1:0][  InDataWidth-1:0] sram_a_rdata;
-  logic signed [ NumInputB-1:0][  InDataWidth-1:0] sram_b_rdata;
-  logic signed [NumOutputC-1:0][ OutDataWidth-1:0] sram_c_wdata;
-  logic sram_c_we;
+  logic signed [ InDataWidth-1:0] sram_a_rdata;
+  logic signed [ InDataWidth-1:0] sram_b_rdata;
+  logic signed [OutDataWidth-1:0] sram_c_wdata;
+  logic                           sram_c_we;
 
   //---------------------------
   // Declaration of input and output memories
@@ -97,75 +93,72 @@ module tb_one_mac_gemm;
 
   // Input memory A
   // Note: this is read only
-  multi_port_memory #(
-    .DataWidth     ( InDataWidth  ),
-    .NumPorts      ( NumInputA    ),
-    .DataDepth     ( DataDepth    ),
-    .AddrWidth     ( AddrWidth    )
+  single_port_memory #(
+      .DataWidth(InDataWidth),
+      .DataDepth(DataDepth),
+      .AddrWidth(AddrWidth)
   ) i_sram_a (
-    .clk_i         ( clk_i        ),
-    .rst_ni        ( rst_ni       ),
-    .mem_addr_i    ( sram_a_addr  ),
-    .mem_we_i      ( '0           ),
-    .mem_wr_data_i ( '0           ),
-    .mem_rd_data_o ( sram_a_rdata )
+      .clk_i        (clk_i),
+      .rst_ni       (rst_ni),
+      .mem_addr_i   (sram_a_addr),
+      .mem_we_i     ('0),
+      .mem_wr_data_i('0),
+      .mem_rd_data_o(sram_a_rdata)
   );
 
   // Input memory B
   // Note: this is read only
-  multi_port_memory #(
-    .DataWidth     ( InDataWidth  ),
-    .NumPorts      ( NumInputB    ),
-    .DataDepth     ( DataDepth    ),
-    .AddrWidth     ( AddrWidth    )
+  single_port_memory #(
+      .DataWidth(InDataWidth),
+      .DataDepth(DataDepth),
+      .AddrWidth(AddrWidth)
   ) i_sram_b (
-    .clk_i         ( clk_i        ),
-    .rst_ni        ( rst_ni       ),
-    .mem_addr_i    ( sram_b_addr  ),
-    .mem_we_i      ( '0           ),
-    .mem_wr_data_i ( '0           ),
-    .mem_rd_data_o ( sram_b_rdata )
+      .clk_i        (clk_i),
+      .rst_ni       (rst_ni),
+      .mem_addr_i   (sram_b_addr),
+      .mem_we_i     ('0),
+      .mem_wr_data_i('0),
+      .mem_rd_data_o(sram_b_rdata)
   );
 
   // Output memory C
   // Note: this is write only
-  multi_port_memory #(
-    .DataWidth     ( OutDataWidth ),
-    .NumPorts      ( NumOutputC   ),
-    .DataDepth     ( DataDepth    ),
-    .AddrWidth     ( AddrWidth    )
+  single_port_memory #(
+      .DataWidth(OutDataWidth),
+      .DataDepth(DataDepth),
+      .AddrWidth(AddrWidth)
   ) i_sram_c (
-    .clk_i         ( clk_i        ),
-    .rst_ni        ( rst_ni       ),
-    .mem_addr_i    ( sram_c_addr  ),
-    .mem_we_i      ( {NumOutputC{sram_c_we}}),
-    .mem_wr_data_i ( sram_c_wdata ),
-    .mem_rd_data_o ( /* unused */ )
+      .clk_i        (clk_i),
+      .rst_ni       (rst_ni),
+      .mem_addr_i   (sram_c_addr),
+      .mem_we_i     (sram_c_we),
+      .mem_wr_data_i(sram_c_wdata),
+      .mem_rd_data_o(  /* unused */)
   );
 
   //---------------------------
   // DUT instantiation
   //---------------------------
   gemm_accelerator_top #(
-    .InDataWidth      ( InDataWidth   ),
-    .OutDataWidth     ( OutDataWidth  ),
-    .AddrWidth        ( AddrWidth     ),
-    .SizeAddrWidth    ( SizeAddrWidth )
+      .InDataWidth  (InDataWidth),
+      .OutDataWidth (OutDataWidth),
+      .AddrWidth    (AddrWidth),
+      .SizeAddrWidth(SizeAddrWidth)
   ) i_dut (
-    .clk_i            ( clk_i         ),
-    .rst_ni           ( rst_ni        ),
-    .start_i          ( start         ),
-    .M_size_i         ( M_i           ),
-    .K_size_i         ( K_i           ),
-    .N_size_i         ( N_i           ),
-    .sram_a_addr_o    ( sram_a_addr   ),
-    .sram_b_addr_o    ( sram_b_addr   ),
-    .sram_c_addr_o    ( sram_c_addr   ),
-    .sram_a_rdata_i   ( sram_a_rdata  ),
-    .sram_b_rdata_i   ( sram_b_rdata  ),
-    .sram_c_wdata_o   ( sram_c_wdata  ),
-    .sram_c_we_o      ( sram_c_we     ),
-    .done_o           ( done          )
+      .clk_i         (clk_i),
+      .rst_ni        (rst_ni),
+      .start_i       (start),
+      .M_size_i      (M_i),
+      .K_size_i      (K_i),
+      .N_size_i      (N_i),
+      .sram_a_addr_o (sram_a_addr),
+      .sram_b_addr_o (sram_b_addr),
+      .sram_c_addr_o (sram_c_addr),
+      .sram_a_rdata_i(sram_a_rdata),
+      .sram_b_rdata_i(sram_b_rdata),
+      .sram_c_wdata_o(sram_c_wdata),
+      .sram_c_we_o   (sram_c_we),
+      .done_o        (done)
   );
 
   //---------------------------
@@ -213,7 +206,7 @@ module tb_one_mac_gemm;
   initial begin
 
     // Initial reset
-    start = 1'b0;
+    start  = 1'b0;
     rst_ni = 1'b0;
     #50;
     rst_ni = 1'b1;
@@ -260,25 +253,18 @@ module tb_one_mac_gemm;
       // Initialize memories with random data
       for (integer m = 0; m < M_i; m++) begin
         for (integer k = 0; k < K_i; k++) begin
-          i_sram_a.memory[m*K_i + k] = $urandom()%(2**InDataWidth);
+          i_sram_a.memory[m*K_i+k] = $urandom() % (2 ** InDataWidth);
         end
       end
 
       for (integer k = 0; k < K_i; k++) begin
         for (integer n = 0; n < N_i; n++) begin
-          i_sram_b.memory[k*N_i + n] = $urandom()%(2**InDataWidth);
+          i_sram_b.memory[k*N_i+n] = $urandom() % (2 ** InDataWidth);
         end
       end
 
       // Generate golden result
-      gemm_golden(
-        M_i,
-        K_i,
-        N_i,
-        i_sram_a.memory,
-        i_sram_b.memory,
-        G_memory
-      );
+      gemm_golden(M_i, K_i, N_i, i_sram_a.memory, i_sram_b.memory, G_memory);
 
       // Just delay 1 cycle
       clk_delay(1);
@@ -287,11 +273,8 @@ module tb_one_mac_gemm;
       start_and_wait_gemm();
 
       // Verify the result
-      verify_result_c(
-        G_memory,
-        i_sram_c.memory,
-        NumOutputC,
-        0 // Set this to 1 to make mismatches fatal
+      verify_result_c(G_memory, i_sram_c.memory, DataDepth,
+                      0 // Set this to 1 to make mismatches fatal
       );
 
       // Just some trailing cycles
