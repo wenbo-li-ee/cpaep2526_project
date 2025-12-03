@@ -21,17 +21,25 @@ module tb_one_mac_gemm;
   // General Parameters
   parameter int unsigned InDataWidth   = 8;
   parameter int unsigned OutDataWidth  = 32;
+  parameter int unsigned InMemWidth    = InDataWidth * 16; // Assuming 16 inputs packed
+  parameter int unsigned OutMemWidth   = OutDataWidth * 16; // Assuming 16 outputs packed
+
   parameter int unsigned DataDepth     = 4096;
   parameter int unsigned AddrWidth     = (DataDepth <= 1) ? 1 : $clog2(DataDepth);
   parameter int unsigned SizeAddrWidth = 8;
 
   // Test Parameters
   parameter int unsigned MaxNum   = 32;
-  parameter int unsigned NumTests = 10;
+  parameter int unsigned NumTests = 3;
 
-  parameter int unsigned SingleM = 8;
-  parameter int unsigned SingleK = 8;
-  parameter int unsigned SingleN = 8;
+  parameter int unsigned SingleM = 4;
+  parameter int unsigned SingleK = 64;
+  parameter int unsigned SingleN = 16;
+
+  parameter int unsigned NumPE_M  = 4;
+  parameter int unsigned NumPE_N  = 4;
+  parameter int unsigned NumIp_K  = 4;
+
 
   //---------------------------
   // Wires
@@ -39,6 +47,11 @@ module tb_one_mac_gemm;
 
   // Size control
   logic [SizeAddrWidth-1:0] M_i, K_i, N_i;
+  logic [SizeAddrWidth-1:0] M_size_u, K_size_u, N_size_u;
+
+  assign M_size_u = M_i >> 2;
+  assign K_size_u = K_i >> 2;
+  assign N_size_u = N_i >> 2;
 
   // Clock, reset, and other signals
   logic clk_i;
@@ -50,7 +63,7 @@ module tb_one_mac_gemm;
   // Memory
   //---------------------------
   // Golden data dump
-  logic signed [OutDataWidth-1:0] G_memory [DataDepth];
+  logic signed [OutMemWidth-1:0] G_memory [DataDepth];
 
   // Memory control
   logic [AddrWidth-1:0] sram_a_addr;
@@ -58,9 +71,9 @@ module tb_one_mac_gemm;
   logic [AddrWidth-1:0] sram_c_addr;
 
   // Memory access
-  logic signed [ InDataWidth-1:0] sram_a_rdata;
-  logic signed [ InDataWidth-1:0] sram_b_rdata;
-  logic signed [OutDataWidth-1:0] sram_c_wdata;
+  logic signed [ InMemWidth-1:0] sram_a_rdata;
+  logic signed [ InMemWidth-1:0] sram_b_rdata;
+  logic signed [OutMemWidth-1:0] sram_c_wdata;
   logic                           sram_c_we;
 
   //---------------------------
@@ -87,7 +100,7 @@ module tb_one_mac_gemm;
   // Input memory A
   // Note: this is read only
   single_port_memory #(
-    .DataWidth     ( InDataWidth  ),
+    .DataWidth     ( InMemWidth  ),
     .DataDepth     ( DataDepth    ),
     .AddrWidth     ( AddrWidth    )
   ) i_sram_a (
@@ -102,7 +115,7 @@ module tb_one_mac_gemm;
   // Input memory B
   // Note: this is read only
   single_port_memory #(
-    .DataWidth     ( InDataWidth  ),
+    .DataWidth     ( InMemWidth  ),
     .DataDepth     ( DataDepth    ),
     .AddrWidth     ( AddrWidth    )
   ) i_sram_b (
@@ -117,7 +130,7 @@ module tb_one_mac_gemm;
   // Output memory C
   // Note: this is write only
   single_port_memory #(
-    .DataWidth     ( OutDataWidth ),
+    .DataWidth     ( OutMemWidth ),
     .DataDepth     ( DataDepth    ),
     .AddrWidth     ( AddrWidth    )
   ) i_sram_c (
@@ -135,8 +148,15 @@ module tb_one_mac_gemm;
   gemm_accelerator_top #(
     .InDataWidth   ( InDataWidth   ),
     .OutDataWidth  ( OutDataWidth  ),
+    .InMemWidth    ( InMemWidth    ),
+    .OutMemWidth   ( OutMemWidth   ),
     .AddrWidth     ( AddrWidth     ),
-    .SizeAddrWidth ( SizeAddrWidth )
+    .SizeAddrWidth ( SizeAddrWidth ),
+    .NumPE_M       ( NumPE_M       ),
+    .NumPE_N       ( NumPE_N       ),
+    .NumIp_K       ( NumIp_K       ),
+    .size_a_bus   ( NumIp_K * InDataWidth ),
+    .size_b_bus   ( NumIp_K * InDataWidth )
   ) i_dut (
     .clk_i          ( clk_i        ),
     .rst_ni         ( rst_ni       ),
@@ -197,7 +217,9 @@ module tb_one_mac_gemm;
 
   // Sequence driver
   initial begin
-
+    integer base_bit;
+    integer m, n, k;
+    integer m_in, n_in, k_in;
     // Initial reset
     start  = 1'b0;
     rst_ni = 1'b0;
@@ -207,15 +229,32 @@ module tb_one_mac_gemm;
     for (integer num_test = 0; num_test < NumTests; num_test++) begin
       $display("Test number: %0d", num_test);
 
-      if (NumTests > 1) begin
-        M_i = $urandom_range(1, MaxNum);
-        K_i = $urandom_range(1, MaxNum);
-        N_i = $urandom_range(1, MaxNum);
-      end else begin
+      // if (NumTests > 1) begin
+      //   M_i = $urandom_range(1, MaxNum);
+      //   K_i = $urandom_range(1, MaxNum);
+      //   N_i = $urandom_range(1, MaxNum);
+      // end else begin
+      //   M_i = SingleM;
+      //   K_i = SingleK;
+      //   N_i = SingleN;
+      // end
+      if (num_test == 0) begin
         M_i = SingleM;
         K_i = SingleK;
         N_i = SingleN;
+      end 
+      else if (num_test == 1) begin
+        M_i = 16;
+        K_i = 64;
+        N_i = 4;
       end
+      else if (num_test == 2) begin
+        M_i = 32;
+        K_i = 32;
+        N_i = 32;
+      end
+
+
 
       $display("M: %0d, K: %0d, N: %0d", M_i, K_i, N_i);
 
@@ -251,20 +290,31 @@ module tb_one_mac_gemm;
       //---------------------------
 
       // Initialize memories with random data
-      for (integer m = 0; m < M_i; m++) begin
-        for (integer k = 0; k < K_i; k++) begin
-          i_sram_a.memory[m*K_i+k] = $urandom() % (2 ** InDataWidth);
+      // integer base_bit;
+      for ( m = 0; m < M_size_u; m++) begin
+        for ( k = 0; k < K_size_u; k++) begin
+          for ( m_in = 0; m_in < NumPE_M; m_in++) begin
+            for ( k_in = 0; k_in < NumIp_K; k_in++) begin
+              base_bit = m_in*InDataWidth*NumIp_K + k_in*InDataWidth;
+              i_sram_a.memory[m*K_i+k][base_bit +: InDataWidth] = $urandom() % (2 ** InDataWidth);
+            end
+          end
         end
       end
 
-      for (integer k = 0; k < K_i; k++) begin
-        for (integer n = 0; n < N_i; n++) begin
-          i_sram_b.memory[k*N_i+n] = $urandom() % (2 ** InDataWidth);
+      for ( n = 0; n < N_size_u; n++) begin
+        for ( k = 0; k < K_size_u; k++) begin
+          for ( n_in = 0; n_in < NumPE_N; n_in++) begin
+            for ( k_in = 0; k_in < NumIp_K; k_in++) begin
+              base_bit = n_in*InDataWidth*NumIp_K + k_in*InDataWidth;
+              i_sram_b.memory[n*K_i+k][base_bit +: InDataWidth] = $urandom() % (2 ** InDataWidth);
+            end
+          end
         end
       end
 
       // Generate golden result
-      gemm_golden(M_i, K_i, N_i, i_sram_a.memory, i_sram_b.memory, G_memory);
+      gemm_golden(M_i, K_i, N_i, M_size_u, K_size_u, N_size_u, NumPE_M, NumIp_K, NumPE_N, i_sram_a.memory, i_sram_b.memory, G_memory);
 
       // Just delay 1 cycle
       clk_delay(1);

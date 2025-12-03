@@ -35,8 +35,15 @@
 module gemm_accelerator_top #(
   parameter int unsigned InDataWidth = 8,
   parameter int unsigned OutDataWidth = 32,
+  parameter int unsigned InMemWidth = 128,
+  parameter int unsigned OutMemWidth = 512,
   parameter int unsigned AddrWidth = 16,
-  parameter int unsigned SizeAddrWidth = 8
+  parameter int unsigned SizeAddrWidth = 8,
+  parameter int unsigned NumPE_M = 4,
+  parameter int unsigned NumPE_N = 4,
+  parameter int unsigned NumIp_K = 4,
+  parameter int unsigned size_a_bus = NumIp_K * InDataWidth,
+  parameter int unsigned size_b_bus = NumIp_K * InDataWidth
 ) (
   input  logic                            clk_i,
   input  logic                            rst_ni,
@@ -47,12 +54,13 @@ module gemm_accelerator_top #(
   output logic        [    AddrWidth-1:0] sram_a_addr_o,
   output logic        [    AddrWidth-1:0] sram_b_addr_o,
   output logic        [    AddrWidth-1:0] sram_c_addr_o,
-  input  logic signed [  InDataWidth-1:0] sram_a_rdata_i,
-  input  logic signed [  InDataWidth-1:0] sram_b_rdata_i,
-  output logic signed [ OutDataWidth-1:0] sram_c_wdata_o,
+  input  logic signed [   InMemWidth-1:0] sram_a_rdata_i,
+  input  logic signed [   InMemWidth-1:0] sram_b_rdata_i,
+  output logic signed [  OutMemWidth-1:0] sram_c_wdata_o,
   output logic                            sram_c_we_o,
   output logic                            done_o
 );
+
 
   //---------------------------
   // Wires
@@ -60,6 +68,13 @@ module gemm_accelerator_top #(
   logic [SizeAddrWidth-1:0] M_count;
   logic [SizeAddrWidth-1:0] K_count;
   logic [SizeAddrWidth-1:0] N_count;
+
+  logic [SizeAddrWidth-1:0] M_size_u;
+  logic [SizeAddrWidth-1:0] K_size_u;
+  logic [SizeAddrWidth-1:0] N_size_u;
+  assign M_size_u = M_size_i >> 2;
+  assign K_size_u = K_size_i >> 2;
+  assign N_size_u = N_size_i >> 2;
 
   logic busy;
   logic valid_data;
@@ -89,9 +104,9 @@ module gemm_accelerator_top #(
     .result_valid_o ( sram_c_we_o ),
     .busy_o         ( busy        ),
     .done_o         ( done_o      ),
-    .M_size_i       ( M_size_i    ),
-    .K_size_i       ( K_size_i    ),
-    .N_size_i       ( N_size_i    ),
+    .M_size_i       ( M_size_u    ),
+    .K_size_i       ( K_size_u    ),
+    .N_size_i       ( N_size_u    ),
     .M_count_o      ( M_count     ),
     .K_count_o      ( K_count     ),
     .N_count_o      ( N_count     )
@@ -165,20 +180,97 @@ module gemm_accelerator_top #(
   //---------------------------
 
   // The MAC PE instantiation and data path logics
-  general_mac_pe #(
-    .InDataWidth  ( InDataWidth            ),
-    .NumInputs    ( 1                      ),
-    .OutDataWidth ( OutDataWidth           )
-  ) i_mac_pe (
-    .clk_i        ( clk_i                  ),
-    .rst_ni       ( rst_ni                 ),
-    .a_i          ( sram_a_rdata_i         ),
-    .b_i          ( sram_b_rdata_i         ),
-    .a_valid_i    ( valid_data             ),
-    .b_valid_i    ( valid_data             ),
-    .init_save_i  ( sram_c_we_o || start_i ),
-    .acc_clr_i    ( !busy                  ),
-    .c_o          ( sram_c_wdata_o         )
-  );
+  // general_mac_pe #(
+  //   .InDataWidth  ( InDataWidth            ),
+  //   .NumInputs    ( 1                      ),
+  //   .OutDataWidth ( OutDataWidth           )
+  // ) i_mac_pe (
+  //   .clk_i        ( clk_i                  ),
+  //   .rst_ni       ( rst_ni                 ),
+  //   .a_i          ( sram_a_rdata_i         ),
+  //   .b_i          ( sram_b_rdata_i         ),
+  //   .a_valid_i    ( valid_data             ),
+  //   .b_valid_i    ( valid_data             ),
+  //   .init_save_i  ( sram_c_we_o || start_i ),
+  //   .acc_clr_i    ( !busy                  ),
+  //   .c_o          ( sram_c_wdata_o         )
+  // );
+
+logic signed [NumIp_K*InDataWidth-1:0]   a_bus   [NumPE_M][NumPE_N];
+logic signed [NumIp_K*InDataWidth-1:0]   b_bus   [NumPE_M][NumPE_N];
+
+genvar ar, ac;
+generate
+  for(ar = 0; ar < NumPE_M; ar++) begin : row_a
+    // int size_a_bus = NumIp_K * InDataWidth;
+    for(ac = 0; ac < NumPE_N; ac++) begin : column_a
+      assign a_bus[ar][ac] = sram_a_rdata_i[ar*size_a_bus +: size_a_bus];
+    end
+  end
+
+endgenerate
+
+genvar br, bc;
+generate
+  for(bc = 0; bc < NumPE_N; bc++) begin : columns_b
+    // int size_b_bus = NumIp_K * InDataWidth;
+    for(br = 0; br < NumPE_M; br++) begin : row_b
+      assign b_bus[br][bc] = sram_b_rdata_i[bc*size_b_bus +: size_b_bus];
+    end
+  end
+
+endgenerate
+
+// output for each PE
+logic signed [OutDataWidth-1:0]  c_bus   [NumPE_M][NumPE_N];
+// group signal of NumPE_M * NumPE_N outputs
+logic signed [NumPE_M*NumPE_N*OutDataWidth-1:0] c_pack;
+
+logic                            init_bus[NumPE_M][NumPE_N];
+logic                            clr_bus [NumPE_M][NumPE_N];
+
+
+// 4×4 MAC 阵列
+genvar gi, gj;
+generate
+  for (gi = 0; gi < NumPE_M; gi++) begin : gen_pe_row
+    for (gj = 0; gj < NumPE_N; gj++) begin : gen_pe_col
+
+      general_mac_pe #(
+        .InDataWidth  ( InDataWidth  ),
+        .NumInputs    ( NumIp_K           ),
+        .OutDataWidth ( OutDataWidth )
+      ) i_mac_pe (
+        .clk_i        ( clk_i                      ),
+        .rst_ni       ( rst_ni                     ),
+        .a_i          ( a_bus[gi][gj]              ),
+        .b_i          ( b_bus[gi][gj]              ),
+        .a_valid_i    ( valid_data                 ),
+        .b_valid_i    ( valid_data                 ),
+        .init_save_i  ( init_bus[gi][gj]           ),
+        .acc_clr_i    ( clr_bus[gi][gj]            ),
+        .c_o          ( c_bus[gi][gj]              )
+      );
+
+    end
+  end
+endgenerate
+
+//pack c_bus[gi][gj] into one big signal
+//assign sram_c_wdata_o to the signal after packing
+genvar i, j;
+generate 
+    for (i = 0; i < NumPE_M; i++) begin : pack_row
+        for (j = 0; j < NumPE_N; j++) begin : pack_col
+            localparam int flat_index = i*NumPE_N + j;
+            assign c_pack[flat_index*OutDataWidth +: OutDataWidth]
+                   = c_bus[i][j];
+        end
+    end
+endgenerate
+
+assign sram_c_wdata_o = c_pack;
+
+
 
 endmodule
