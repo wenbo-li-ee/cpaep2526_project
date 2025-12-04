@@ -36,9 +36,13 @@ module tb_one_mac_gemm;
   parameter int unsigned SingleK = 64;
   parameter int unsigned SingleN = 16;
 
-  parameter int unsigned NumPE_M  = 4;
-  parameter int unsigned NumPE_N  = 4;
-  parameter int unsigned NumIp_K  = 4;
+  parameter int unsigned NumPE_M  = 2;
+  parameter int unsigned NumPE_N  = 2;
+  parameter int unsigned NumIp_K  = 16;
+
+  parameter int unsigned Shift_M = $clog2(NumPE_M);
+  parameter int unsigned Shift_N = $clog2(NumPE_N);
+  parameter int unsigned Shift_K = $clog2(NumIp_K);
 
 
   //---------------------------
@@ -49,9 +53,9 @@ module tb_one_mac_gemm;
   logic [SizeAddrWidth-1:0] M_i, K_i, N_i;
   logic [SizeAddrWidth-1:0] M_size_u, K_size_u, N_size_u;
 
-  assign M_size_u = M_i >> 2;
-  assign K_size_u = K_i >> 2;
-  assign N_size_u = N_i >> 2;
+  assign M_size_u = M_i >> Shift_M;
+  assign K_size_u = K_i >> Shift_K;
+  assign N_size_u = N_i >> Shift_N;
 
   // Clock, reset, and other signals
   logic clk_i;
