@@ -2,9 +2,9 @@
 // Useful functions for testing
 //--------------------------
 function automatic void gemm_golden(
-  input  logic [AddrWidth-1:0] M,
-  input  logic [AddrWidth-1:0] K,
-  input  logic [AddrWidth-1:0] N,
+  // input  logic [AddrWidth-1:0] M,
+  // input  logic [AddrWidth-1:0] K,
+  // input  logic [AddrWidth-1:0] N,
 
   input  logic [AddrWidth-1:0] M_size_u,
   input  logic [AddrWidth-1:0] K_size_u,
@@ -18,6 +18,9 @@ function automatic void gemm_golden(
   input  logic signed [ InMemWidth-1:0] B_i [DataDepth],
   output logic signed [OutMemWidth-1:0] Y_o [DataDepth]
 );
+  int unsigned M = M_size_u*NumPE_M;
+  int unsigned K = K_size_u*NumIp_K;
+  int unsigned N = N_size_u*NumPE_N;
   int unsigned m, n, k;
   int signed acc;
   logic signed [InDataWidth-1:0] element_A [DataDepth];

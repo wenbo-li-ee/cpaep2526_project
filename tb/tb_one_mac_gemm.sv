@@ -70,6 +70,7 @@ module tb_one_mac_gemm;
   logic rst_ni;
   logic start;
   logic done;
+  logic [AddrWidth-1:0] test_depth;
 
   //---------------------------
   // Memory
@@ -326,7 +327,7 @@ module tb_one_mac_gemm;
       end
 
       // Generate golden result
-      gemm_golden(M, K, N, M_i, K_i, N_i, NumPE_M, NumIp_K, NumPE_N, i_sram_a.memory, i_sram_b.memory, G_memory);
+      gemm_golden(M_i, K_i, N_i, NumPE_M, NumIp_K, NumPE_N, i_sram_a.memory, i_sram_b.memory, G_memory);
 
       // Just delay 1 cycle
       clk_delay(1);
@@ -335,7 +336,8 @@ module tb_one_mac_gemm;
       start_and_wait_gemm();
 
       // Verify the result
-      verify_result_c(G_memory, i_sram_c.memory, DataDepth,
+      test_depth = M_i * N_i;
+      verify_result_c(G_memory, i_sram_c.memory, test_depth,
                       0 // Set this to 1 to make mismatches fatal
       );
 
