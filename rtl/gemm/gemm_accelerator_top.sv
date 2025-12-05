@@ -229,8 +229,6 @@ logic signed [OutDataWidth-1:0]  c_bus   [NumPE_M][NumPE_N];
 // group signal of NumPE_M * NumPE_N outputs
 logic signed [NumPE_M*NumPE_N*OutDataWidth-1:0] c_pack;
 
-logic                            init_bus[NumPE_M][NumPE_N];
-logic                            clr_bus [NumPE_M][NumPE_N];
 
 
 // 4×4 MAC 阵列
@@ -250,8 +248,8 @@ generate
         .b_i          ( b_bus[gi][gj]              ),
         .a_valid_i    ( valid_data                 ),
         .b_valid_i    ( valid_data                 ),
-        .init_save_i  ( init_bus[gi][gj]           ),
-        .acc_clr_i    ( clr_bus[gi][gj]            ),
+        .init_save_i  ( sram_c_we_o || start_i      ),   
+        .acc_clr_i    ( !busy            ),
         .c_o          ( c_bus[gi][gj]              )
       );
 
