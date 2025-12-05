@@ -32,17 +32,17 @@ module tb_one_mac_gemm;
   parameter int unsigned MaxNum   = 32;
   parameter int unsigned NumTests = 3;
 
-  parameter int unsigned SingleM = 4;
-  parameter int unsigned SingleK = 64;
-  parameter int unsigned SingleN = 16;
+  parameter int unsigned SingleM = 1;
+  parameter int unsigned SingleK = 16;
+  parameter int unsigned SingleN = 4;
 
-  parameter int unsigned NumPE_M  = 2;
-  parameter int unsigned NumPE_N  = 2;
-  parameter int unsigned NumIp_K  = 16;
+  parameter int unsigned NumPE_M  = 4;
+  parameter int unsigned NumPE_N  = 4;
+  parameter int unsigned NumIp_K  = 4;
 
-  parameter int unsigned Shift_M = $clog2(NumPE_M);
-  parameter int unsigned Shift_N = $clog2(NumPE_N);
-  parameter int unsigned Shift_K = $clog2(NumIp_K);
+  // parameter int unsigned Shift_M = $clog2(NumPE_M);
+  // parameter int unsigned Shift_N = $clog2(NumPE_N);
+  // parameter int unsigned Shift_K = $clog2(NumIp_K);
 
 
   //---------------------------
@@ -51,11 +51,19 @@ module tb_one_mac_gemm;
 
   // Size control
   logic [SizeAddrWidth-1:0] M_i, K_i, N_i;
-  logic [SizeAddrWidth-1:0] M_size_u, K_size_u, N_size_u;
+  logic [SizeAddrWidth-1:0] M, K, N;
+  assign M = M_i * NumPE_M;
+  assign K = K_i * NumIp_K;
+  assign N = N_i * NumPE_N;
+  // logic [SizeAddrWidth-1:0] M_size_u, K_size_u, N_size_u;
 
-  assign M_size_u = M_i >> Shift_M;
-  assign K_size_u = K_i >> Shift_K;
-  assign N_size_u = N_i >> Shift_N;
+  // assign M_size_u = M_i >> Shift_M;
+  // assign K_size_u = K_i >> Shift_K;
+  // assign N_size_u = N_i >> Shift_N;
+
+  // assign M_size_u =  >> Shift_M;
+  // assign K_size_u = K_i >> Shift_K;
+  // assign N_size_u = N_i >> Shift_N;
 
   // Clock, reset, and other signals
   logic clk_i;
@@ -248,14 +256,14 @@ module tb_one_mac_gemm;
         N_i = SingleN;
       end 
       else if (num_test == 1) begin
-        M_i = 16;
-        K_i = 64;
-        N_i = 4;
+        M_i = 4;
+        K_i = 16;
+        N_i = 1;
       end
       else if (num_test == 2) begin
-        M_i = 32;
-        K_i = 32;
-        N_i = 32;
+        M_i = 8;
+        K_i = 8;
+        N_i = 8;
       end
 
 
@@ -295,8 +303,8 @@ module tb_one_mac_gemm;
 
       // Initialize memories with random data
       // integer base_bit;
-      for ( m = 0; m < M_size_u; m++) begin
-        for ( k = 0; k < K_size_u; k++) begin
+      for ( m = 0; m < M_i; m++) begin
+        for ( k = 0; k < K_i; k++) begin
           for ( m_in = 0; m_in < NumPE_M; m_in++) begin
             for ( k_in = 0; k_in < NumIp_K; k_in++) begin
               base_bit = m_in*InDataWidth*NumIp_K + k_in*InDataWidth;
@@ -306,8 +314,8 @@ module tb_one_mac_gemm;
         end
       end
 
-      for ( n = 0; n < N_size_u; n++) begin
-        for ( k = 0; k < K_size_u; k++) begin
+      for ( n = 0; n < N_i; n++) begin
+        for ( k = 0; k < K_i; k++) begin
           for ( n_in = 0; n_in < NumPE_N; n_in++) begin
             for ( k_in = 0; k_in < NumIp_K; k_in++) begin
               base_bit = n_in*InDataWidth*NumIp_K + k_in*InDataWidth;
@@ -318,7 +326,7 @@ module tb_one_mac_gemm;
       end
 
       // Generate golden result
-      gemm_golden(M_i, K_i, N_i, M_size_u, K_size_u, N_size_u, NumPE_M, NumIp_K, NumPE_N, i_sram_a.memory, i_sram_b.memory, G_memory);
+      gemm_golden(M, K, N, M_i, K_i, N_i, NumPE_M, NumIp_K, NumPE_N, i_sram_a.memory, i_sram_b.memory, G_memory);
 
       // Just delay 1 cycle
       clk_delay(1);

@@ -39,12 +39,12 @@ module gemm_accelerator_top #(
   parameter int unsigned OutMemWidth = 512,
   parameter int unsigned AddrWidth = 16,
   parameter int unsigned SizeAddrWidth = 8,
-  parameter int unsigned NumPE_M = 2,
-  parameter int unsigned NumPE_N = 2,
-  parameter int unsigned NumIp_K = 16,
-  parameter int unsigned Shift_M = $clog2(NumPE_M),
-  parameter int unsigned Shift_N = $clog2(NumPE_N),
-  parameter int unsigned Shift_K = $clog2(NumIp_K),
+  parameter int unsigned NumPE_M = 4,
+  parameter int unsigned NumPE_N = 4,
+  parameter int unsigned NumIp_K = 4,
+  // parameter int unsigned Shift_M = $clog2(NumPE_M),
+  // parameter int unsigned Shift_N = $clog2(NumPE_N),
+  // parameter int unsigned Shift_K = $clog2(NumIp_K),
   parameter int unsigned size_a_bus = NumIp_K * InDataWidth,
   parameter int unsigned size_b_bus = NumIp_K * InDataWidth
 ) (
@@ -72,12 +72,12 @@ module gemm_accelerator_top #(
   logic [SizeAddrWidth-1:0] K_count;
   logic [SizeAddrWidth-1:0] N_count;
 
-  logic [SizeAddrWidth-1:0] M_size_u;
-  logic [SizeAddrWidth-1:0] K_size_u;
-  logic [SizeAddrWidth-1:0] N_size_u;
-  assign M_size_u = M_size_i >> Shift_M;
-  assign K_size_u = K_size_i >> Shift_K;
-  assign N_size_u = N_size_i >> Shift_N;
+  // logic [SizeAddrWidth-1:0] M_size_u;
+  // logic [SizeAddrWidth-1:0] K_size_u;
+  // logic [SizeAddrWidth-1:0] N_size_u;
+  // assign M_size_u = M_size_i >> Shift_M;
+  // assign K_size_u = K_size_i >> Shift_K;
+  // assign N_size_u = N_size_i >> Shift_N;
 
   logic busy;
   logic valid_data;
@@ -107,9 +107,9 @@ module gemm_accelerator_top #(
     .result_valid_o ( sram_c_we_o ),
     .busy_o         ( busy        ),
     .done_o         ( done_o      ),
-    .M_size_i       ( M_size_u    ),
-    .K_size_i       ( K_size_u    ),
-    .N_size_i       ( N_size_u    ),
+    .M_size_i       ( M_size_i    ),
+    .K_size_i       ( K_size_i    ),
+    .N_size_i       ( N_size_i    ),
     .M_count_o      ( M_count     ),
     .K_count_o      ( K_count     ),
     .N_count_o      ( N_count     )
